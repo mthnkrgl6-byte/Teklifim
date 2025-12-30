@@ -47,6 +47,15 @@ class PriceListStore {
     this.persist();
   }
 
+  removeList(name) {
+    this.lists = this.lists.filter((l) => l.name !== name);
+    if (!this.lists.length) {
+      this.lists = [defaultPriceList];
+      this.ensureItemIds();
+    }
+    this.persist();
+  }
+
   getList(name) {
     return this.lists.find((l) => l.name === name);
   }
@@ -110,6 +119,7 @@ class OfferBuilder {
     document.getElementById('bulkDeleteItems').addEventListener('click', () => this.bulkDeleteSelected());
     document.getElementById('saveEdits').addEventListener('click', () => this.persistEditedRows());
     document.getElementById('toggleAllRows').addEventListener('change', (e) => this.toggleAllRows(e.target.checked));
+    document.getElementById('deleteList').addEventListener('click', () => this.handleDeleteList());
   }
 
   switchTab(target) {
@@ -146,6 +156,9 @@ class OfferBuilder {
       option.textContent = `${list.name} (${list.group || 'Genel'})`;
       this.manageListSelect.appendChild(option);
     });
+    if (!this.manageListSelect.value && this.store.lists.length) {
+      this.manageListSelect.value = this.store.lists[0].name;
+    }
     this.renderListEditor();
   }
 
@@ -331,9 +344,12 @@ class OfferBuilder {
   }
 
   extractQuantity(text) {
-    const match = text.match(/(\d+[\.,]?\d*)/);
-    if (!match) return 1;
-    return parseFloat(match[1].replace(',', '.'));
+    const normalized = text.toLowerCase();
+    const unitMatch = normalized.match(/(\d+[\.,]?\d*)\s*(adet|ad|tane|metre|mt|m|kg|koli|paket)?/);
+    const timesMatch = normalized.match(/x\s*(\d+[\.,]?\d*)/);
+    const numberText = unitMatch?.[1] || timesMatch?.[1];
+    if (numberText) return parseFloat(numberText.replace(',', '.')) || 1;
+    return 1;
   }
 
   normalize(text) {
@@ -658,6 +674,15 @@ class OfferBuilder {
 
   persistEditedRows() {
     alert('Değişiklikler kaydedildi.');
+  }
+
+  handleDeleteList() {
+    const name = this.manageListSelect.value;
+    if (!name) return;
+    const confirmDelete = confirm(`"${name}" listesini silmek istediğinize emin misiniz?`);
+    if (!confirmDelete) return;
+    this.store.removeList(name);
+    this.renderPriceLists();
   }
 }
 

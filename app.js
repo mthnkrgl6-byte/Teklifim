@@ -355,16 +355,41 @@ class OfferBuilder {
   normalize(text) {
     return text
       .toLowerCase()
-      .replace(/[^a-z0-9çğıöşü\s]/g, '')
+      .replace(/[^\wçğıöşü\.x\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
 
+  tokenize(text) {
+    const normalized = this.normalize(text);
+    return normalized
+      .split(' ')
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+
+  numericTokens(tokens) {
+    return tokens.filter((t) => /\d/.test(t));
+  }
+
   score(query, candidate) {
-    const qTokens = this.normalize(query).split(' ');
-    const cTokens = this.normalize(candidate).split(' ');
-    const common = qTokens.filter((t) => cTokens.includes(t)).length;
-    return common / Math.max(cTokens.length, 1);
+    const qTokens = this.tokenize(query);
+    const cTokens = this.tokenize(candidate);
+    if (!qTokens.length || !cTokens.length) return 0;
+
+    const qNumbers = this.numericTokens(qTokens);
+    const cNumbers = this.numericTokens(cTokens);
+    const numberOverlap = qNumbers.filter((t) => cNumbers.includes(t)).length;
+
+    const wordOverlap = qTokens.filter((t) => cTokens.includes(t)).length;
+    const jaccard = wordOverlap / Math.max(cTokens.length, qTokens.length, 1);
+
+    const substringBonus =
+      this.normalize(candidate).includes(this.normalize(query)) || this.normalize(query).includes(this.normalize(candidate))
+        ? 0.5
+        : 0;
+
+    return jaccard + numberOverlap * 0.6 + substringBonus;
   }
 
   matchRequests(requests) {
@@ -382,7 +407,14 @@ class OfferBuilder {
         }
       });
 
-      const resolved = best || searchableItems[0];
+      const resolved =
+        bestScore > 0
+          ? best
+          : {
+              code: '—',
+              name: req.query,
+              price: 0,
+            };
       return {
         code: resolved.code,
         name: resolved.name,
